@@ -1,25 +1,62 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
-    public float moveSpeed = 5.0f;
+    public float moveSpeed = 5f;
+    public float jumpForce = 5f;
+    public float turnSpeed = 100f;
+
+    private Rigidbody rb;
+    private bool isGrounded;
+
+    // ノックバック制御用
+    private float knockbackTimer = 0.0f;
+    private float currentInputSpeed = 0.0f;
+
+    public float CurrentSpeed => currentInputSpeed;
+
+    void Start()
+    {
+        rb = GetComponent<Rigidbody>();
+    }
 
     void Update()
     {
-        // キーボード（WASD / 矢印キー）の入力をチェック
-        float moveX = 0f;
-        float moveZ = 0f;
-
-        if (Keyboard.current != null)
+        if (knockbackTimer > 0.0f)
         {
-            if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) moveZ += 1f;
-            if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) moveZ -= 1f;
-            if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) moveX += 1f;
-            if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) moveX -= 1f;
+            knockbackTimer -= Time.deltaTime;
+            currentInputSpeed = 0.0f;
+            return;
         }
 
-        Vector3 moveDirection = new Vector3(moveX, 0, moveZ).normalized;
-        transform.Translate(moveDirection * moveSpeed * Time.deltaTime);
+        float moveInput = Input.GetAxis("Vertical"); 
+        float turnInput = Input.GetAxis("Horizontal"); 
+
+        currentInputSpeed = Mathf.Abs(moveInput) * moveSpeed;
+
+        transform.Rotate(0, turnInput * turnSpeed * Time.deltaTime, 0);
+
+        Vector3 moveDirection = transform.forward * moveInput * moveSpeed * Time.deltaTime;
+        transform.position += moveDirection;
+
+        bool jumpInput = Input.GetKeyDown(KeyCode.Space) || 
+                         Input.GetMouseButtonDown(0) || 
+                         Input.GetKeyDown(KeyCode.JoystickButton0);
+
+        if (jumpInput && isGrounded)
+        {
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            isGrounded = false;
+        }
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        isGrounded = true;
+    }
+
+    public void ApplyKnockbackStun(float duration)
+    {
+        knockbackTimer = duration;
     }
 }
