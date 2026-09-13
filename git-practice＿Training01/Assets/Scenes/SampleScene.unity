@@ -186,7 +186,7 @@ MonoBehaviour:
   pauseDuration: 3
   wanderChance: 40
   wanderDuration: 2
-  maxSpeed: 5
+  maxSpeed: 3
   accelerationTime: 2
   decelerationTime: 3
   turnSpeed: 50
@@ -335,12 +335,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AutoTracker
   target: {fileID: 1247423069}
-  initialDelay: 4
+  initialDelay: 3
   activeDuration: 5
   pauseDuration: 3.89
   wanderChance: 40
   wanderDuration: 2
-  maxSpeed: 5.7
+  maxSpeed: 5
   accelerationTime: 1
   decelerationTime: 1
   turnSpeed: 41.6
@@ -916,7 +916,7 @@ MonoBehaviour:
   pauseDuration: 3.89
   wanderChance: 40
   wanderDuration: 2
-  maxSpeed: 5.7
+  maxSpeed: 7
   accelerationTime: 1
   decelerationTime: 1
   turnSpeed: 41.6
@@ -1011,7 +1011,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -4.89, y: 2.2395, z: -6.11}
-  m_LocalScale: {x: 0.3, y: 0.3, z: 0.3}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}
@@ -1526,8 +1526,8 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -11.42, y: 2.2395, z: -2.08}
-  m_LocalScale: {x: 0.4, y: 0.4, z: 0.4}
-  m_ConstrainProportionsScale: 1
+  m_LocalScale: {x: 0.4, y: 0.4, z: 2.18944}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
