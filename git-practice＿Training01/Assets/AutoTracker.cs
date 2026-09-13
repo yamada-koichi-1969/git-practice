@@ -1,11 +1,9 @@
 using UnityEngine;
 
-public class AutoTracker : MonoBehaviour
+[RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(KnockbackHandler))]
+public class AutoTracker : MonoBehaviour, IKnockbackTarget
 {
-    // ================================================
-    // インスペクター（設定画面）で調整できる項目
-    // ================================================
-
     [Header("ターゲットの設定")]
     [Tooltip("自動で追尾する対象（Cube_Playerなど）")]
     public Transform target;
@@ -41,13 +39,6 @@ public class AutoTracker : MonoBehaviour
     [Tooltip("ターゲットの方向へ向く旋回スピード")]
     public float turnSpeed = 150.0f;
 
-    [Header("ノックバック（衝突吹っ飛び）の設定")]
-    [Tooltip("ノックバックで吹き飛ぶ力倍率")]
-    public float knockbackMultiplier = 2.0f;
-
-    [Tooltip("ノックバック後に制御を取り戻すまでの時間（秒）")]
-    public float knockbackStunDuration = 0.4f;
-
     [Header("落下回避の設定 (Fall Prevention)")]
     [Tooltip("足元の地面をチェックする前方の距離")]
     public float checkDistance = 1.2f;
@@ -58,55 +49,38 @@ public class AutoTracker : MonoBehaviour
     [Tooltip("回避行動時に回転する角度（度）")]
     public float avoidTurnAngle = 120.0f;
 
-    // ================================================
-    // 内部処理用の変数
-    // ================================================
     private float currentSpeed = 0.0f;
     private float stateTimer = 0.0f;
     private bool isTracking = false;
     private bool hasStarted = false;
 
-    // 落下回避用
     private bool isAvoiding = false;
     private Quaternion avoidTargetRotation;
 
-    // 行動の揺らぎ（徘徊）用
     private bool isWandering = false;
     private float wanderTimer = 0.0f;
     private Quaternion wanderTargetRotation;
 
-    // ノックバック制御用
-    private Rigidbody rb;
-    private float knockbackTimer = 0.0f;
+    private KnockbackHandler knockback;
 
-    // 外部からスピードを取得するためのプロパティ
     public float CurrentSpeed => currentSpeed;
 
-    // ------------------------------------------------
-    // ゲーム開始時の処理
-    // ------------------------------------------------
     void Start()
     {
-        rb = GetComponent<Rigidbody>();
+        knockback = GetComponent<KnockbackHandler>();
         stateTimer = initialDelay;
     }
 
-    // ------------------------------------------------
-    // 毎フレームの処理
-    // ------------------------------------------------
     void Update()
     {
         if (target == null) return;
 
-        // 【ノックバック中（硬直状態）の処理】
-        if (knockbackTimer > 0.0f)
+        if (knockback.IsStunned)
         {
-            knockbackTimer -= Time.deltaTime;
             currentSpeed = 0.0f;
-            return; // 吹き飛んでいる間は自力移動や落下回避を行わず物理挙動に任せる
+            return;
         }
 
-        // 【1. ゲーム開始直後のカウントダウン】
         if (!hasStarted)
         {
             stateTimer -= Time.deltaTime;
@@ -118,7 +92,6 @@ public class AutoTracker : MonoBehaviour
             return;
         }
 
-        // 【2. 「追尾/逸れ」と「停止」の定期切り替え】
         stateTimer -= Time.deltaTime;
         if (stateTimer <= 0.0f)
         {
@@ -135,30 +108,18 @@ public class AutoTracker : MonoBehaviour
             }
         }
 
-        // 【3. 崖のチェック】
-        bool isGroundAhead = CheckGroundAhead();
-
-        if (!isGroundAhead && !isAvoiding)
-        {
-            isAvoiding = true;
-            isWandering = false;
-            avoidTargetRotation = transform.rotation * Quaternion.Euler(0, avoidTurnAngle, 0);
-        }
-
-        // 【4. 落下回避処理】
         if (isAvoiding)
         {
             currentSpeed = 0.0f;
             transform.rotation = Quaternion.RotateTowards(transform.rotation, avoidTargetRotation, turnSpeed * 2.0f * Time.deltaTime);
 
-            if (Quaternion.Angle(transform.rotation, avoidTargetRotation) < 5.0f && isGroundAhead)
+            if (Quaternion.Angle(transform.rotation, avoidTargetRotation) < 5.0f && CheckGroundAhead(transform.forward))
             {
                 isAvoiding = false;
             }
             return;
         }
 
-        // 【5. スピードの自動加減速処理】
         if (isTracking)
         {
             float accelRate = (accelerationTime > 0.0f) ? (maxSpeed / accelerationTime) : maxSpeed;
@@ -172,11 +133,12 @@ public class AutoTracker : MonoBehaviour
             if (currentSpeed < 0.0f) currentSpeed = 0.0f;
         }
 
-        // 【6. 回転・進行方向の処理】
+        Quaternion candidateRotation = transform.rotation;
+
         if (isWandering)
         {
             wanderTimer -= Time.deltaTime;
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, wanderTargetRotation, turnSpeed * Time.deltaTime);
+            candidateRotation = Quaternion.RotateTowards(transform.rotation, wanderTargetRotation, turnSpeed * Time.deltaTime);
 
             if (wanderTimer <= 0.0f)
             {
@@ -191,11 +153,23 @@ public class AutoTracker : MonoBehaviour
             if (targetDirection != Vector3.zero)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(targetDirection);
-                transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, turnSpeed * Time.deltaTime);
+                candidateRotation = Quaternion.RotateTowards(transform.rotation, targetRotation, turnSpeed * Time.deltaTime);
             }
         }
 
-        // 【7. 移動処理】
+        Vector3 candidateForward = candidateRotation * Vector3.forward;
+
+        if (!CheckGroundAhead(candidateForward))
+        {
+            isAvoiding = true;
+            isWandering = false;
+            currentSpeed = 0.0f;
+            avoidTargetRotation = transform.rotation * Quaternion.Euler(0, avoidTurnAngle, 0);
+            return;
+        }
+
+        transform.rotation = candidateRotation;
+
         if (currentSpeed > 0.0f)
         {
             Vector3 moveDirection = transform.forward * currentSpeed * Time.deltaTime;
@@ -203,73 +177,13 @@ public class AutoTracker : MonoBehaviour
         }
     }
 
-    // ------------------------------------------------
-    // 衝突判定（ノックバック計算）
-    // ------------------------------------------------
-    private void OnCollisionEnter(Collision collision)
+    public void OnKnockbackStunned(float duration)
     {
-        float mySpeed = currentSpeed;
-        float otherSpeed = 0.0f;
-
-        PlayerController player = collision.gameObject.GetComponent<PlayerController>();
-        AutoTracker otherTracker = collision.gameObject.GetComponent<AutoTracker>();
-
-        if (player != null)
-        {
-            otherSpeed = player.CurrentSpeed;
-        }
-        else if (otherTracker != null)
-        {
-            otherSpeed = otherTracker.CurrentSpeed;
-        }
-
-        // 速度比較（自分が勝っている、または動いている場合）
-        if (mySpeed >= otherSpeed && mySpeed > 0.1f)
-        {
-            Vector3 pushDirection = (collision.transform.position - transform.position).normalized;
-            pushDirection.y = 0.2f;
-
-            float speedDifference = mySpeed - otherSpeed + 1.0f;
-            float forceMagnitude = speedDifference * knockbackMultiplier;
-
-            // 1. 敗者側（大きなノックバックを受ける）
-            Rigidbody otherRb = collision.gameObject.GetComponent<Rigidbody>();
-            if (otherRb != null)
-            {
-                otherRb.AddForce(pushDirection * forceMagnitude, ForceMode.Impulse);
-
-                if (player != null)
-                {
-                    player.ApplyKnockbackStun(knockbackStunDuration);
-                }
-                else if (otherTracker != null)
-                {
-                    otherTracker.ApplyKnockbackStun(knockbackStunDuration);
-                }
-            }
-
-            // 2. 勝者（自分）側（1/2 のノックバックを受ける）
-            if (rb != null)
-            {
-                rb.AddForce(-pushDirection * (forceMagnitude * 0.5f), ForceMode.Impulse);
-                ApplyKnockbackStun(knockbackStunDuration * 0.5f);
-            }
-        }
-    }
-
-    // ------------------------------------------------
-    // ノックバック時の硬直（制御停止）を設定
-    // ------------------------------------------------
-    public void ApplyKnockbackStun(float duration)
-    {
-        knockbackTimer = duration;
+        currentSpeed = 0.0f;
         isAvoiding = false;
         isWandering = false;
     }
 
-    // ------------------------------------------------
-    // 新しい移動フェーズ（追尾か逸れか）を決定する
-    // ------------------------------------------------
     private void StartNewTrackingPhase()
     {
         float roll = Random.Range(0.0f, 100.0f);
@@ -290,19 +204,13 @@ public class AutoTracker : MonoBehaviour
         }
     }
 
-    // ------------------------------------------------
-    // 足元前方に地面があるか確認する処理（Raycast）
-    // ------------------------------------------------
-    private bool CheckGroundAhead()
+    private bool CheckGroundAhead(Vector3 forward)
     {
-        Vector3 checkPosition = transform.position + transform.forward * checkDistance;
+        Vector3 checkPosition = transform.position + forward * checkDistance;
         Ray ray = new Ray(checkPosition, Vector3.down);
         return Physics.Raycast(ray, rayLength);
     }
 
-    // ------------------------------------------------
-    // シーン画面にデバッグ用の線を引く
-    // ------------------------------------------------
     private void OnDrawGizmosSelected()
     {
         Vector3 checkPosition = transform.position + transform.forward * checkDistance;
