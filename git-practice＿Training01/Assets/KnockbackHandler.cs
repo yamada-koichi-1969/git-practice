@@ -9,6 +9,9 @@ public class KnockbackHandler : MonoBehaviour
     [Tooltip("ノックバックで吹き飛ぶ力倍率")]
     public float knockbackMultiplier = 2.0f;
 
+    [Tooltip("ノックバックの力の最大値（これ以上は増えない。画面外まで飛ばされるのを防ぐ）")]
+    public float maxKnockbackForce = 8.0f;
+
     [Tooltip("ノックバック後に制御を取り戻すまでの時間（秒）")]
     public float knockbackStunDuration = 0.4f;
 
@@ -62,12 +65,16 @@ public class KnockbackHandler : MonoBehaviour
         float speedDifference = mySpeed - otherSpeed + 1.0f;
         float forceMagnitude = speedDifference * knockbackMultiplier;
 
+        // 力の最大値を制限する（画面外まで飛ばされるのを防ぐ）
+        forceMagnitude = Mathf.Min(forceMagnitude, maxKnockbackForce);
+
         // 1. 敗者側（大きなノックバックを受ける）
         otherHandler.rb.AddForce(pushDirection * forceMagnitude, ForceMode.Impulse);
         otherHandler.ApplyStun(otherHandler.knockbackStunDuration);
 
-        // 2. 勝者（自分）側（1/2 のノックバックを受ける）
-        rb.AddForce(-pushDirection * (forceMagnitude * 0.5f), ForceMode.Impulse);
+        // 2. 勝者（自分）側（1/2 のノックバックを受ける。こちらも同じ上限の半分でキャップされる）
+        float selfForceMagnitude = Mathf.Min(forceMagnitude * 0.5f, maxKnockbackForce * 0.5f);
+        rb.AddForce(-pushDirection * selfForceMagnitude, ForceMode.Impulse);
         ApplyStun(knockbackStunDuration * 0.5f);
     }
 }
